@@ -1,8 +1,19 @@
 TRACERT=tracert.cpp
-CXXFLAGS=-g -ggdb -Wall -Wextra -std=c++17
+TRACERT_BIN=tracert
+
+ifeq ($(conf),d)
+	OPTFLAGS=-g -ggdb
+else
+	ifeq ($(conf),of)
+		OPTFLAGS=-Ofast
+	else
+		OPTFLAGS=-O3
+	endif
+endif
+
+CXXFLAGS=$(OPTFLAGS) -Wall -Wextra -std=c++17
 CXXC=g++
 
-TRACERT_BIN=tracert
 
 run: clear $(TRACERT_BIN)
 	sudo ./$(TRACERT_BIN)

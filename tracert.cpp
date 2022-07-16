@@ -2,6 +2,7 @@
 #include <asm-generic/socket.h>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -32,6 +33,81 @@
 #define RECV_TIMEOUT    1       // timeout delay for receiving packets in seconds
 
 
+namespace CLA
+{
+    std::string LowerStr(const std::string& str)
+    {
+        std::string strl(str);
+        for(char& c : strl)
+            c = std::tolower(c);
+        return strl;
+    }
+
+    void PrintHelp(const char* name)
+    {
+        std::cout << "\nUsage: " << name << " 'website' [options]\n";
+        std::cout << "-h or --help:             print this help message\n";
+        std::cout << "-m [n] or --max-hops [n]: Set max hops e.g. [-m 64] hops a maximum of 64 times\n";
+        std::cout << std::endl;
+    }
+
+    struct UInput
+    {
+        std::string hostname;
+        size_t hops = 32;
+    };
+
+    std::optional<UInput> Handler(int argc, char** argv)
+    {
+        UInput ip;
+        if(argc == 1)
+        {
+            std::cout << "Usage: " << argv[0] << " 'website'\n";
+            std::cout << "       [" << argv[0] << " -h] for additional information\n";
+            return std::nullopt;
+        }
+
+        for(int i = 1; i < argc; ++i)
+        {
+            const std::string str(argv[i]);
+            const std::string lstr(LowerStr(str));
+
+            if(lstr == "-h" || lstr == "--help" || lstr == "help")
+            {
+                PrintHelp(argv[0]);
+                return std::nullopt;
+            }
+
+            if(lstr == "-m" || lstr == "--max-hops")
+            {
+                if(i == argc - 1) {
+                    PrintHelp(argv[0]);
+                    return std::nullopt;
+                }
+
+                std::stringstream sstream(argv[i+1]);
+                sstream >> ip.hops;
+            }
+            else if(lstr[0] == '-')
+            {
+                PrintHelp(argv[0]);
+                return std::nullopt;
+            }
+            else if(LowerStr(argv[i-1]) != "-m" && LowerStr(argv[i-1]) != "--max-hops")
+            {
+                ip.hostname = std::move(str);
+            }
+        }
+
+        if(ip.hostname.empty() || ip.hops == 0)
+        {
+            PrintHelp(argv[0]);
+            return std::nullopt;
+        }
+        return ip;
+    }
+}
+
 
 namespace DNS
 {
@@ -39,7 +115,7 @@ namespace DNS
     {
         const hostent* hostEntity;
         if((hostEntity = gethostbyname(address.c_str())) == nullptr) {
-            std::cerr << "\nDNS lookup failed! Could not resolve hostname!\n";
+            std::cerr << "DNS lookup failed! Could not resolve hostname!\n";
             return std::string(); // No ip found for this hostname
         }
 
@@ -195,6 +271,8 @@ public:
         : m_AddrCon(addrCon), m_IpAddress(ipAddress), m_PingPkt(GetPingPkt()) {}
     ~Socket() noexcept 
     {
+        if(m_SocketFd == -1)
+            return;
         if(close(m_SocketFd) != 0)
             std::cerr << "\nFailed to close socket! ID: [" << m_SocketFd << ']' << std::endl; 
     }
@@ -258,25 +336,26 @@ public:
 };
 
 
-int main()
+int main(int argc, char** argv)
 {
-    const std::string website = "www.google.com";
-    const size_t hops = 64;
+    const std::optional<CLA::UInput> uip = CLA::Handler(argc, argv);
+    if(!uip.has_value())
+        return EXIT_SUCCESS;
 
     const Time::TimePoint startTime = Time::GetCurrentTime();
 
     sockaddr_in addrCon;
-    const std::string ipAddress = DNS::Lookup(website, addrCon);
+    const std::string ipAddress = DNS::Lookup(uip.value().hostname, addrCon);
     const std::string reverseDNS = DNS::ReverseLookup(ipAddress);
-    if(ipAddress.empty() || reverseDNS.empty()) return EXIT_FAILURE;
+    if(ipAddress.empty() || reverseDNS.empty()) return EXIT_SUCCESS;
 
-    std::cout << "traceroute to '" << website << "' (" << ipAddress <<  ")" << " reverse DNS '" << reverseDNS << "', " << hops << " hops max, " << PING_PKT_S << " bytes packets" << std::endl;
+    std::cout << "traceroute to '" << uip.value().hostname << "' (" << ipAddress <<  ")" << " reverse DNS '" << reverseDNS << "', " << uip.value().hops << " hops max, " << PING_PKT_S << " bytes packets" << std::endl;
 
     Socket socket(&addrCon, ipAddress);
     if(!socket.Init())
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
 
-    const double traceTime = socket.Trace(hops);
+    const double traceTime = socket.Trace(uip.value().hops);
     const double endTime = Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTime);
     std::cout << "\nTraceing time:   " << traceTime << " ms | " << (traceTime / 1000.0) << " sec\n";
     std::cout << "Traceroute time: " << endTime << " ms | " << (endTime / 1000.0) << " sec" << std::endl;
