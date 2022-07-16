@@ -7,7 +7,7 @@ else
 	ifeq ($(conf),of)
 		OPTFLAGS=-Ofast
 	else
-		OPTFLAGS=-O3
+		OPTFLAGS=-O2
 	endif
 endif
 
@@ -16,7 +16,7 @@ CXXC=g++
 
 
 run: clear $(TRACERT_BIN)
-	sudo ./$(TRACERT_BIN)
+	sudo ./$(TRACERT_BIN) google.com
 
 $(TRACERT_BIN): $(TRACERT)
 	$(CXXC) $(CXXFLAGS) $(TRACERT) -o $(TRACERT_BIN)

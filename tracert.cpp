@@ -1,6 +1,4 @@
 // c++std
-#include <asm-generic/socket.h>
-#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -9,12 +7,9 @@
 #include <optional>
 
 // cstd
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <cstring>
+#include <cstddef>
 #include <fcntl.h>
-#include <signal.h>
-#include <time.h>
 
 // net
 #include <sys/types.h>
@@ -23,6 +18,8 @@
 #include <netinet/ip_icmp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+// platform
 #include <unistd.h>
 
 
@@ -47,7 +44,7 @@ namespace CLA
     {
         std::cout << "\nUsage: " << name << " 'website' [options]\n";
         std::cout << "-h or --help:             print this help message\n";
-        std::cout << "-m [n] or --max-hops [n]: Set max hops e.g. [-m 64] hops a maximum of 64 times\n";
+        std::cout << "-m [n] or --max-hops [n]: Set max hops e.g. [-m 64] hops a maximum of 64 times | default: 32\n";
         std::cout << std::endl;
     }
 
@@ -214,28 +211,27 @@ private:
     }
     
 
-    PingPkt GetPingPkt() const noexcept
+    PingPkt GetPingPkt() noexcept
     {
         PingPkt pckt;
         bzero(&pckt, sizeof(pckt)); // fill packet with 0 bytes
         
         pckt.hdr.type = ICMP_ECHO;
-        pckt.hdr.un.echo.id = getpid();
+        pckt.hdr.un.echo.id = htons(1);
+        //pckt.hdr.un.echo.id = getpid();
 
         long unsigned int i;
-        int msg_count = 0;
         for (i = 0; i < sizeof(pckt.msg)-1; i++ )
             pckt.msg[i] = i+'0';
 
         pckt.msg[i] = 0;
-        pckt.hdr.un.echo.sequence = msg_count++;
+        pckt.hdr.un.echo.sequence = 0;
         pckt.hdr.checksum = Checksum(&pckt, sizeof(pckt));
-
         return pckt;
     }
 
 
-    std::optional<std::string> Ping() const noexcept
+    std::optional<std::string> Ping() noexcept
     {
         Time::Sleep<std::chrono::microseconds>(PING_SLEEP_RATE);
  
@@ -256,7 +252,7 @@ private:
         {
             //if(errno != EAGAIN)
             {
-                std::cerr << "Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
+                std::cout << "Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
                 return std::nullopt;
             }
         }
