@@ -1,5 +1,5 @@
 TRACERT=tracert.cpp
-CXXFLAGS=-g -ggdb -Wall -Wextra
+CXXFLAGS=-g -ggdb -Wall -Wextra -std=c++17
 CXXC=g++
 
 TRACERT_BIN=tracert
