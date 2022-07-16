@@ -1,1 +1,5 @@
+.vs/
+
 tracert
+*.vcxproj.filters
+*.vcxproj.user
