@@ -28,7 +28,7 @@
 // Define the Packet Constants
 #define PING_PKT_S      64      // ping packet size
 #define PORT_NO         0       // Automatic port number
-#define PING_SLEEP_RATE 1000000 // sleeping time between pings
+#define PING_SLEEP_RATE 1000000 // sleeping time between pings in microseconds
 #define RECV_TIMEOUT    1       // timeout delay for receiving packets in seconds
 
 
@@ -61,10 +61,9 @@ namespace DNS
 {
     std::string Lookup(const std::string& address, sockaddr_in& addrCon)
     {
-        std::cout << "\nResolving DNS...\n";
-
         hostent* hostEntity;
         if((hostEntity = gethostbyname(address.c_str())) == nullptr) {
+            std::cerr << "\nDNS lookup failed! Could not resolve hostname!\n";
             return std::string(); // No ip found for this hostname
         }
 
@@ -88,7 +87,7 @@ namespace DNS
         char buffer[NI_MAXHOST];
         if(getnameinfo(reinterpret_cast<sockaddr*>(&tempAddr), sockLen, buffer, sizeof(buffer), nullptr, 0, NI_NAMEREQD))
         {
-            std::cout << "Could not resolve reverse lookup of hostname\n";
+            std::cerr << "Could not resolve reverse lookup of hostname\n";
             return std::string();
         }
 
@@ -122,57 +121,25 @@ namespace Time
 class Socket
 {
 private:
-    static int sm_TTL;
-private:
     sockaddr_in* m_AddrCon;
-    const char* m_IpAddress;
-    const char* m_HostName;
-    const char* m_ReverseHostname;
+    const std::string& m_IpAddress;
 
     int m_SocketFd = -1;
-public:
-    Socket(sockaddr_in* addrCon, const char* ipAddress, const char* hostname, const char* reverseHostname) noexcept
-        : m_AddrCon(addrCon), m_IpAddress(ipAddress), m_HostName(hostname), m_ReverseHostname(reverseHostname) {}
-    ~Socket() noexcept 
+    size_t m_TTL = 1;
+private:
+    void PrintRecv(const std::string& ipAddPckRecv, double rtt)
     {
-        if(close(m_SocketFd) != 0)
-            std::cout << "\nFailed to close socket: " << m_SocketFd << std::endl;
-    }
-
-
-    bool Init() noexcept
-    {
-        m_SocketFd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-        if(m_SocketFd < 0)
-        {
-            std::cout << "Socket file descriptor not received!\n";
-            return false;
-        }
-
-        int flags = fcntl(m_SocketFd, F_GETFL, 0);
-        if (flags == -1) return false;
-        flags = flags & ~O_NONBLOCK; // make socket blocking [(flags | O_NONBLOCK) = non blocking]
-        fcntl(m_SocketFd, F_SETFL, flags);
-
-        return true;
+        // 15 == max length for ipv4 address
+        size_t spaces = 15 - ipAddPckRecv.size();
+        std::string buffer(spaces, ' ');
+        std::cout << m_TTL << ' ' << ipAddPckRecv << buffer << " ttl=" << m_TTL << " rtt=" << rtt << " ms" << '\n';
     }
 
 
     std::optional<std::string> Ping() noexcept
     {
-        // setting timeout of recv setting
-        const timeval tv_out{ .tv_sec=RECV_TIMEOUT, .tv_usec=0 };
-        //setsockopt(m_SocketFd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof(tv_out));
-        if (setsockopt(m_SocketFd, SOL_IP, IP_TTL, &sm_TTL, sizeof(sm_TTL)) != 0)
-        {
-            std::cout << "\nSetting socket options to TTL failed!\n";
-            return std::nullopt;
-        }
-
-
         ping_pkt pckt;
-        //filling packet
-        bzero(&pckt, sizeof(pckt));
+        bzero(&pckt, sizeof(pckt)); // fill packet with 0 bytes
         
         pckt.hdr.type = ICMP_ECHO;
         pckt.hdr.un.echo.id = getpid();
@@ -192,7 +159,7 @@ public:
         const Time::TimePoint timeStart = Time::GetCurrentTime();
         if (sendto(m_SocketFd, &pckt, sizeof(pckt), MSG_WAITALL, (sockaddr*) m_AddrCon, sizeof(*m_AddrCon)) <= 0)
         {
-            std::cout << "\nPacket Sending Failed!\n";
+            std::cerr << "Packet Sending Failed! TTL: " << m_TTL << std::endl;
             return std::nullopt;
         }
         
@@ -202,54 +169,104 @@ public:
         
         if (recvfrom(m_SocketFd, &pckt, sizeof(pckt), MSG_WAITALL, (sockaddr*)&r_addr, (socklen_t*)&addr_len) <= 0)
         {
-            if(errno != EAGAIN)
+            //if(errno != EAGAIN)
             {
-                std::cout << "\nPacket receive failed!\n";
-                std::cout << "Error: " << strerror(errno) << "\n\n";
+                std::cerr << "Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
                 return std::nullopt;
             }
         }
 
         const double rtt_msec = Time::DeltaTime<std::milli>(Time::GetCurrentTime(), timeStart);
-        std::string ipAddPckRecv = std::string(inet_ntoa(r_addr.sin_addr));
-        std::cout << "ICMP packet received from " << ipAddPckRecv << " ttl=" << sm_TTL << " rtt=" << rtt_msec << " ms" << '\n';
-        ++sm_TTL;
+        const std::string ipAddPckRecv = std::string(inet_ntoa(r_addr.sin_addr));
+        PrintRecv(ipAddPckRecv, rtt_msec);
         return ipAddPckRecv;
     }
+public:
+    Socket(sockaddr_in* addrCon, const std::string& ipAddress) noexcept
+        : m_AddrCon(addrCon), m_IpAddress(ipAddress) {}
+    ~Socket() noexcept 
+    {
+        if(close(m_SocketFd) != 0)
+            std::cerr << "\nFailed to close socket! ID: [" << m_SocketFd << ']' << std::endl; 
+    }
+
+
+    bool Init() noexcept
+    {
+        m_SocketFd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+        if(m_SocketFd < 0)
+        {
+            std::cerr << "Failed to open socket! Make sure you run with root privileges\n";
+            return false;
+        }
+
+        int flags = fcntl(m_SocketFd, F_GETFL, 0);
+        if (flags == -1) {
+            std::cerr << "Failed to receive socket flags!\n";
+            return false;
+        }
+        flags = flags & ~O_NONBLOCK; // make socket blocking [(flags | O_NONBLOCK) = non blocking]
+        fcntl(m_SocketFd, F_SETFL, flags);
+
+        return true;
+    }
+
+    
+    // returns the time needed to tracert
+    double Trace(size_t hops) noexcept
+    {
+        const Time::TimePoint startTrace = Time::GetCurrentTime();
+
+        // setting timeout of recv setting
+        const timeval tv_out{ .tv_sec=RECV_TIMEOUT, .tv_usec=0 };
+        if(setsockopt(m_SocketFd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof(tv_out)) != 0)
+        {
+            std::cerr << "Failed to set receive timeout! Timeout: [" << RECV_TIMEOUT << "] sec/s\n";
+            return Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTrace);
+        }
+        
+        for(size_t i = 0; i < hops; ++i)
+        {
+            if (setsockopt(m_SocketFd, SOL_IP, IP_TTL, &m_TTL, sizeof(m_TTL)) != 0)
+            {
+                std::cerr << "Failed to set TTL socket options! TTL: " << m_TTL << std::endl;
+                return Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTrace);
+            }
+            const std::optional<std::string> ipAddRecv = Ping();
+            ++m_TTL;
+
+            if(!ipAddRecv.has_value())
+                continue;
+            if(ipAddRecv.value() == std::string(m_IpAddress))
+            {
+                return Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTrace);
+            }
+        }
+        std::cout << "\nCouldn't trace route to destination in " << hops << " hops" << std::endl;
+        return Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTrace);
+    }
 };
-int Socket::sm_TTL = 1;
 
 
 int main()
 {
     const std::string website = "www.google.com";
+    const size_t hops = 64;
+
+    const Time::TimePoint startTime = Time::GetCurrentTime();
 
     sockaddr_in addrCon;
-
     const std::string ipAddress = DNS::Lookup(website, addrCon);
-    if(ipAddress.empty())
-    {
-        std::cout << "\nDNS lookup failed! Could not resolve hostname!\n";
-        return EXIT_FAILURE;
-    }
+    const std::string reverseDNS = DNS::ReverseLookup(ipAddress);
+    if(ipAddress.empty() || reverseDNS.empty()) return EXIT_FAILURE;
 
-    const std::string reverseHostname = DNS::ReverseLookup(ipAddress);
-    if(reverseHostname.empty()) return EXIT_FAILURE;
+    std::cout << "traceroute to '" << website << "' (" << ipAddress <<  ")" << " reverse DNS '" << reverseDNS << "', " << hops << " hops max, " << PING_PKT_S << " bytes packets\n\n";
 
-    std::cout << "Trying to connect to '" << website << "' IP: " << ipAddress << '\n';
-    std::cout << "Reverse lookup domain: " << reverseHostname << "\n\n";
-
-    Socket socket(&addrCon, ipAddress.c_str(), website.c_str(), reverseHostname.c_str());
+    Socket socket(&addrCon, ipAddress);
     if(!socket.Init())
         return EXIT_FAILURE;
-    for(int i = 0; i < 8; ++i)
-    {
-        std::optional<std::string> ipAddRecv = socket.Ping();
 
-        if(!ipAddRecv.has_value())
-            return EXIT_FAILURE;
-        
-        if(ipAddRecv.value() == ipAddress)
-            return EXIT_SUCCESS;
-    }
+    const double traceTime = socket.Trace(hops);
+    std::cout << "\nTraceing time:   " << traceTime << " ms\n";
+    std::cout << "Traceroute time: " << Time::DeltaTime<std::milli>(Time::GetCurrentTime(), startTime) << " ms" << std::endl;
 }
