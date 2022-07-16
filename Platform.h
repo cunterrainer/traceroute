@@ -9,7 +9,7 @@ namespace Platform
     {
         #ifdef _WIN32
                 return Platform::Windows::Main(argc, argv);
-        #elif defined linux
+        #elif defined __linux__
                 return Platform::Linux::Main(argc, argv);
         #endif
     }

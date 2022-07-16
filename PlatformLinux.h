@@ -1,5 +1,5 @@
 #pragma once
-#ifdef linux
+#ifdef __linux__
 
 // c++std
 #include <iostream>
@@ -262,6 +262,7 @@ namespace Platform::Linux
         const double endTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTime);
         std::cout << "\nTraceing time:   " << traceTime << " ms | " << (traceTime / 1000.0) << " sec\n";
         std::cout << "Traceroute time: " << endTime << " ms | " << (endTime / 1000.0) << " sec" << std::endl;
+        return EXIT_SUCCESS;
     }
 }
 #endif
