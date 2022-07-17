@@ -18,7 +18,20 @@ traceroute to 'myexampleaddr.com' (128.203.255.124) reverse DNS 'my-reverse-dns.
 Traceing time:   7075.42 ms | 7.07541 sec
 Traceroute time: 7103.23 ms | 7.10323 sec
 ```
-This are just some random example addresses
+This are just some randomly generated sample addresses
+
+# Status
+
+- [x] Linux
+    - [x] IPv4
+    - [ ] IPv6
+- [ ] Windows
+    - [ ] IPv4
+    - [ ] IPv6
+
+Windows `IPv4` is almost done.  
+Current implementation status: It's a ping just without the ability to trace the package.  
+`IPv6` for windows and linux will be implemented in the near future.
 
 # Build
 
@@ -36,7 +49,7 @@ conf= or just use without conf for [-O2]
 
 Simply use the provided .sln for visual studio.
 
-## Other  
+## Others 
 
 If you want to use something else it's pritty trivial since the project consists only of a single .cpp file, the rest is defined in header files. Simply compile the .cpp file and be good to go.  
 
