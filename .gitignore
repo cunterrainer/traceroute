@@ -1,1 +1,9 @@
+.vs/
+.vscode/
+Debug/
+Release/
+x64/
+
 tracert
+*.vcxproj.filters
+*.vcxproj.user
