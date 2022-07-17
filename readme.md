@@ -6,7 +6,7 @@ It's a simple traceroute command line application, that enables you to see the r
 # Example
 
 ```
-traceroute to 'myexampleaddr.com' (128.203.255.124) reverse DNS 'my-reverse-dns.net', 32 hops max, 64 bytes packets
+traceroute to 'myexampleaddr.com' (128.203.255.124) reverse DNS 'my-reverse-dns.net', 32 hops max, 64 byte packets
 1. 16.46.10.225    ttl=1 rtt=2.15313 ms
 2. 229.154.175.62  ttl=2 rtt=9.02325 ms
 3. 26.64.71.223    ttl=3 rtt=11.8219 ms

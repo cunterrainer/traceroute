@@ -243,7 +243,7 @@ namespace Platform::Linux
         const std::string reverseDNS = DNS::ReverseLookup(ipAddress);
         if (ipAddress.empty() || reverseDNS.empty()) return EXIT_SUCCESS;
 
-        std::cout << "traceroute to '" << uip.value().hostname << "' (" << ipAddress << ")" << " reverse DNS '" << reverseDNS << "', " << uip.value().hops << " hops max, " << PING_PKT_S << " bytes packets" << std::endl;
+        std::cout << "traceroute to '" << uip.value().hostname << "' (" << ipAddress << ")" << " reverse DNS '" << reverseDNS << "', " << uip.value().hops << " hops max, " << PING_PKT_S << " byte packets" << std::endl;
 
         Socket socket(&addrCon, ipAddress);
         if (!socket.Init())
