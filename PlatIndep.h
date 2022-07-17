@@ -115,7 +115,7 @@ namespace PIndep
             // 15 == max length for ipv4 address
             size_t spaces = 15 - ipAddPckRecv.size();
             std::string buffer(spaces, ' ');
-            std::cout << ttl << ' ' << ipAddPckRecv << buffer << " ttl=" << ttl << " rtt=" << rtt << " ms" << std::endl;
+            std::cout << ttl << ". " << ipAddPckRecv << buffer << " ttl=" << ttl << " rtt=" << rtt << " ms" << std::endl;
         }
     }
 }

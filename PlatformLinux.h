@@ -91,15 +91,6 @@ namespace Platform::Linux
         size_t m_TTL = 1;
         PingPkt m_PingPkt;
     private:
-        void PrintRecv(const std::string& ipAddPckRecv, double rtt) const noexcept
-        {
-            // 15 == max length for ipv4 address
-            size_t spaces = 15 - ipAddPckRecv.size();
-            std::string buffer(spaces, ' ');
-            std::cout << m_TTL << ' ' << ipAddPckRecv << buffer << " ttl=" << m_TTL << " rtt=" << rtt << " ms" << std::endl;
-        }
-
-
         // Calculating the Check Sum
         unsigned short Checksum(void* b, int len) const noexcept
         {
@@ -166,7 +157,7 @@ namespace Platform::Linux
 
             const double rttTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), timeStart);
             const std::string ipAddPckRecv = std::string(inet_ntoa(r_addr.sin_addr));
-            PrintRecv(ipAddPckRecv, rttTime);
+            PIndep::IO::PrintRecv(m_TTL, ipAddPckRecv, rttTime);
             return ipAddPckRecv;
         }
     public:
