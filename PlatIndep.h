@@ -12,7 +12,7 @@ namespace PIndep
 {
     namespace CLA
     {
-        static std::string LowerStr(const std::string& str)
+        static std::string LowerStr(const std::string& str) noexcept
         {
             std::string strl(str);
             for (char& c : strl)
@@ -20,7 +20,7 @@ namespace PIndep
             return strl;
         }
 
-        static void PrintHelp(const char* name)
+        static void PrintHelp(const char* name) noexcept
         {
             std::cout << "\nUsage: " << name << " 'website' [options]\n";
             std::cout << "-h or --help:             print this help message\n";
@@ -34,7 +34,7 @@ namespace PIndep
             size_t hops = 32;
         };
 
-        static std::optional<UInput> Handler(int argc, char** argv)
+        static std::optional<UInput> Handler(int argc, char** argv) noexcept
         {
             UInput ip;
             if (argc == 1)
@@ -89,21 +89,33 @@ namespace PIndep
     namespace Time
     {
         using TimePoint = std::chrono::high_resolution_clock::time_point;
-        static TimePoint GetCurrentTime()
+        static TimePoint GetCurrentTime() noexcept
         {
             return std::chrono::high_resolution_clock::now();
         }
 
         template<class T>
-        static double DeltaTime(const TimePoint& t1, const TimePoint& t2)
+        static double DeltaTime(const TimePoint& t1, const TimePoint& t2) noexcept
         {
             return std::chrono::duration<double, T>(t1 - t2).count();
         }
 
         template<class T>
-        static void Sleep(size_t time)
+        static void Sleep(size_t time) noexcept
         {
             std::this_thread::sleep_for(T(time));
+        }
+    }
+
+
+    namespace IO
+    {
+        void PrintRecv(size_t ttl, const std::string& ipAddPckRecv, double rtt) noexcept
+        {
+            // 15 == max length for ipv4 address
+            size_t spaces = 15 - ipAddPckRecv.size();
+            std::string buffer(spaces, ' ');
+            std::cout << ttl << ' ' << ipAddPckRecv << buffer << " ttl=" << ttl << " rtt=" << rtt << " ms" << std::endl;
         }
     }
 }

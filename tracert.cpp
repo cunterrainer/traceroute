@@ -2,5 +2,7 @@
 
 int main(int argc, char** argv)
 {
-    return Platform::Main(argc, argv);
+    Platform::Main(argc, argv);
+    std::cout << "Done!" << std::endl;
+    std::cin.get();
 }

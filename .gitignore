@@ -1,4 +1,7 @@
 .vs/
+Debug/
+Release/
+x64/
 
 tracert
 *.vcxproj.filters

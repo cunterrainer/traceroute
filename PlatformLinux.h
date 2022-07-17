@@ -146,7 +146,7 @@ namespace Platform::Linux
             const PIndep::Time::TimePoint timeStart = PIndep::Time::GetCurrentTime();
             if (sendto(m_SocketFd, &m_PingPkt, sizeof(m_PingPkt), MSG_WAITALL, (sockaddr*)m_AddrCon, sizeof(*m_AddrCon)) <= 0)
             {
-                std::cerr << "Packet Sending Failed! TTL: " << m_TTL << std::endl;
+                std::cout << m_TTL << " Packet Sending Failed! TTL: " << m_TTL << std::endl;
                 return std::nullopt;
             }
 
@@ -159,7 +159,7 @@ namespace Platform::Linux
             {
                 //if(errno != EAGAIN)
                 {
-                    std::cout << "Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
+                    std::cout << m_TTL << " Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
                     return std::nullopt;
                 }
             }
@@ -203,7 +203,7 @@ namespace Platform::Linux
         }
 
 
-        // returns the time needed to tracert
+        // returns the time needed to traceroute
         double Trace(size_t hops) noexcept
         {
             const PIndep::Time::TimePoint startTrace = PIndep::Time::GetCurrentTime();
