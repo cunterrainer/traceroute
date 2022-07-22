@@ -15,6 +15,7 @@
 
 // c++std
 #include <iostream>
+#include <optional>
 
 // platform
 #include <WinSock2.h>
@@ -52,7 +53,25 @@ namespace Platform::Windows
         }
 
 
-        int PrintAddress(SOCKADDR* sa, int salen)
+        static std::optional<std::string> GetAddress(const addrinfo* aif)
+        {
+            char host[NI_MAXHOST];
+            char serv[NI_MAXSERV];
+
+            const int hostlen = NI_MAXHOST;
+            const int servlen = NI_MAXSERV;
+
+            if (getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host, hostlen, serv, servlen, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
+            {
+                std::cerr << "Failed to get name info!\n";
+                return std::nullopt;
+            }
+
+            return { {host, serv} };
+        }
+
+
+        static int PrintAddress(const SOCKADDR* sa, int salen)
         {
             char host[NI_MAXHOST];
             char serv[NI_MAXSERV];
@@ -125,7 +144,7 @@ namespace Platform::Windows
     }
 
 
-    int PostRecvfrom(SOCKET s, char* buf, int buflen, SOCKADDR* from, int* fromlen, WSAOVERLAPPED* ol)
+    static int PostRecvfrom(SOCKET s, char* buf, int buflen, SOCKADDR* from, int* fromlen, WSAOVERLAPPED* ol)
     {
         WSABUF wbuf;
         wbuf.buf = buf;
@@ -217,7 +236,7 @@ namespace Platform::Windows
     static int Main(int argc, char** argv)
     {
         // fra16s52-in-f4.1e100.net
-        const std::string website = "fra16s52-in-f4.1e100.net";
+        const std::string website = "www.google.com";
         
         // Load Winsock
         WSADATA wsaData;
@@ -232,8 +251,8 @@ namespace Platform::Windows
         if (dest == nullptr) goto CLEANUP;
         int addressFamiliy = dest->ai_family;
         int protocol = IPPROTO_ICMP;
-
         
+
         // Get the bind address
         addrinfo* local = DNS::ResolveAddress(nullptr, "0", AF_INET, 0, 0);
         if (local == nullptr) goto CLEANUP;
@@ -248,9 +267,9 @@ namespace Platform::Windows
         }
 
 
-        int ttl = 1;
+        int ttl = 32;
         SetTTL(s, ttl);
-        std::cout << "Set ttl" << std::endl;
+
 
         int packetLen = sizeof(ICMP_HDR);
         int dataSize = 64; // size of data to send
@@ -297,8 +316,7 @@ namespace Platform::Windows
         #define MAX_RECV_BUF_LEN 0xFFFF    // Max incoming packet size.
         char recvbuf[MAX_RECV_BUF_LEN];    // For received packets
         int recvbuflen = MAX_RECV_BUF_LEN; // Length of received packets.
-        //PostRecvfrom(s, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &recvol);
-
+        PostRecvfrom(s, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &recvol);
 
         DNS::PrintAddress(dest->ai_addr, (int)dest->ai_addrlen);
         //ReverseLookup(dest->ai_addr, (int)dest->ai_addrlen, recvbuf, recvbuflen);
@@ -319,23 +337,23 @@ namespace Platform::Windows
                 goto CLEANUP;
             }
 
-            int timeout = 6000;
-            setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-
-            sockaddr fromR;
-            int fromRLen = sizeof(fromR);
-            iResult = recvfrom(s, recvbuf, recvbuflen, 0, &fromR, &fromRLen);
-            if (iResult == SOCKET_ERROR)
-            {
-                std::cerr << "recvfrom failed! Error: " << WSAGetLastError() << std::endl;
-                DNS::PrintAddress(&fromR, fromRLen);
-                goto CLEANUP;
-            }
+            //int timeout = 6000;
+            //setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+            
+            //sockaddr fromR;
+            //int fromRLen = sizeof(fromR);
+            //iResult = recvfrom(s, recvbuf, recvbuflen, 0, &fromR, &fromRLen);
+            //if (iResult == SOCKET_ERROR)
+            //{
+            //    std::cerr << "recvfrom failed! Error: " << WSAGetLastError() << std::endl;
+            //    DNS::PrintAddress(&fromR, fromRLen);
+            //    goto CLEANUP;
+            //}
 
 
             // Wait for a response
-            //#define DEFAULT_RECV_TIMEOUT 6000
-            //iResult = WaitForSingleObject((HANDLE)recvol.hEvent, DEFAULT_RECV_TIMEOUT);
+            #define DEFAULT_RECV_TIMEOUT 1000
+            iResult = WaitForSingleObject((HANDLE)recvol.hEvent, DEFAULT_RECV_TIMEOUT);
             if (iResult == WAIT_FAILED)
             {
                 std::cerr << "WaitForSingleObject failed! Error: " << GetLastError() << std::endl;
@@ -345,11 +363,10 @@ namespace Platform::Windows
             {
                 std::cout << "Request timed out " << std::endl;
                 //DNS::PrintAddress((SOCKADDR*)&from, fromlen);
-                std::cout << std::endl;
+                //std::cout << std::endl;
             }
             else
             {
-                std::cout << "Got message\n";
                 DWORD bytes;
                 DWORD flags;
                 iResult = WSAGetOverlappedResult(s, &recvol, &bytes, FALSE, &flags);
@@ -362,7 +379,7 @@ namespace Platform::Windows
                 WSAResetEvent(recvol.hEvent);
 
                 std::cout << "Reply from: ";
-                DNS::PrintAddress((SOCKADDR*)&fromR, fromRLen);
+                DNS::PrintAddress((SOCKADDR*)&from, fromlen);
                 if (time == 0)
                     printf(": bytes=%d time<1ms TTL=%d\n", dataSize, ttl);
                 else
@@ -371,12 +388,12 @@ namespace Platform::Windows
                 if (i < 4 - 1)
                 {
                     fromlen = sizeof(from);
-                    //PostRecvfrom(s, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &recvol);
+                    PostRecvfrom(s, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &recvol);
                 }
             }
             PIndep::Time::Sleep<std::chrono::seconds>(1);
-            ++ttl;
-            SetTTL(s, ttl);
+            //++ttl;
+            //SetTTL(s, ttl);
         }
 
 
