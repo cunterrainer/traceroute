@@ -1,8 +1,6 @@
 #pragma once
 #ifdef _WIN32
 
-//#define _WIN32_WINNT
-
 // c++std
 #include <iostream>
 #include <optional>
@@ -74,8 +72,8 @@ namespace Platform::Windows
             char host[NI_MAXHOST];
             char serv[NI_MAXSERV];
 
-            const int hostlen = NI_MAXHOST;
-            const int servlen = NI_MAXSERV;
+            constexpr int hostlen = NI_MAXHOST;
+            constexpr int servlen = NI_MAXSERV;
 
             if (getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host, hostlen, serv, servlen, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
             {
@@ -83,7 +81,7 @@ namespace Platform::Windows
                 return std::nullopt;
             }
 
-            return { host };
+            return std::string(host);
         }
 
 
@@ -118,9 +116,9 @@ namespace Platform::Windows
         static constexpr int cm_PacketLen = sizeof(ICMP_HDR) + cm_DataSize;
     private:
         SOCKET m_Sock = INVALID_SOCKET;
-        addrinfo* m_Dest = nullptr;
+        addrinfo* m_Dest  = nullptr;
         addrinfo* m_Local = nullptr;
-        char* m_IcmpBuf = nullptr;
+        char* m_IcmpBuf   = nullptr;
         int m_TTL = 32;
         WSAOVERLAPPED m_Recvol;
     private:
@@ -260,13 +258,9 @@ namespace Platform::Windows
             if (SetTTL() == SOCKET_ERROR)
                 return false;
 
-
-            int packetLen = sizeof(ICMP_HDR);
-            packetLen += cm_DataSize;
-
-
+            
             // Allocate the buffer that will conatin the ICMP request
-            m_IcmpBuf = static_cast<char*>(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, packetLen));
+            m_IcmpBuf = static_cast<char*>(HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cm_PacketLen));
             if (m_IcmpBuf == nullptr)
             {
                 std::cerr << "HeapAlloc failed! Error: " << GetLastError() << std::endl;
@@ -329,6 +323,9 @@ namespace Platform::Windows
                 SetIcmpSequence();
                 ComputeIcmpChecksum();
 
+                m_TTL = 1;
+                SetTTL();
+                ++m_TTL;
                 const PIndep::Time::TimePoint time = PIndep::Time::GetCurrentTimeH();
                 int rc = sendto(m_Sock, m_IcmpBuf, cm_PacketLen, 0, m_Dest->ai_addr, (int)m_Dest->ai_addrlen);
                 if (rc == SOCKET_ERROR)
@@ -337,7 +334,6 @@ namespace Platform::Windows
                     return;
                 }
 
-                // recvfrom
 
                 // Wait for a response
                 constexpr int DEFAULT_RECV_TIMEOUT = 1000;
@@ -349,7 +345,7 @@ namespace Platform::Windows
                 }
                 else if (rc == WAIT_TIMEOUT)
                 {
-                    std::cout << "Request timed out " << std::endl;
+                    std::cout << "Request timed out" << std::endl;
                 }
                 else
                 {
@@ -366,7 +362,7 @@ namespace Platform::Windows
                     addrinfo inf;
                     inf.ai_addr = (SOCKADDR*)&from;
                     inf.ai_addrlen = fromlen;
-                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(time, PIndep::Time::GetCurrentTimeH()));
+                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTimeH(), time));
 
                     if (i < 4 - 1)
                     {
@@ -414,3 +410,25 @@ namespace Platform::Windows
 //    DNS::PrintAddress(&fromR, fromRLen);
 //    goto CLEANUP;
 //}
+
+
+
+
+
+/*
+    DWORD timeout = 1000;
+    setsockopt(m_Sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+
+    sockaddr fromR;
+    int fromRLen = sizeof(fromR);
+
+    constexpr int MAX_RECV_BUF_LEN = 0xFFFF;  // Max incoming packet size.
+    std::unique_ptr<char[]> recvbuf = std::make_unique<char[]>(MAX_RECV_BUF_LEN); // For received packets
+    int recvbuflen = MAX_RECV_BUF_LEN;        // Length of received packets.
+
+    rc = recvfrom(m_Sock, recvbuf.get(), recvbuflen, 0, &fromR, &fromRLen);
+    if (rc == SOCKET_ERROR)
+    {
+        std::cerr << "recvfrom failed! Error: " << WSAGetLastError() << std::endl;
+    }
+*/
