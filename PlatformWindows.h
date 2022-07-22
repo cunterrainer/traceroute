@@ -58,12 +58,12 @@ namespace Platform::Windows
             if (strcmp(serv, "0") != 0)
             {
                 if (sa->sa_family == AF_INET)
-                    std::cout << "[" << host << "]:" << serv;// << std::endl;
+                    std::cout << "[" << host << "]:" << serv;
                 else
-                    std::cout << host << ':' << serv;// << std::endl;
+                    std::cout << host << ':' << serv;
             }
             else
-                std::cout << host;// << std::endl;
+                std::cout << host;
             return NO_ERROR;
         }
 
@@ -113,6 +113,9 @@ namespace Platform::Windows
             unsigned short  icmp_id;
             unsigned short  icmp_sequence;
         };
+
+        static constexpr int cm_DataSize = 64; // bytes of data to sent
+        static constexpr int cm_PacketLen = sizeof(ICMP_HDR) + cm_DataSize;
     private:
         SOCKET m_Sock = INVALID_SOCKET;
         addrinfo* m_Dest = nullptr;
@@ -134,7 +137,7 @@ namespace Platform::Windows
         }
 
 
-        void InitIcmpHeader(int dataSize)
+        void InitIcmpHeader()
         {
             ICMP_HDR* icmpHdr = (ICMP_HDR*)m_IcmpBuf;
 
@@ -149,29 +152,31 @@ namespace Platform::Windows
 
             char* datapart = m_IcmpBuf + sizeof(ICMP_HDR);
             // Place some data in the buffer
-            memset(datapart, 'E', dataSize);
+            memset(datapart, 'E', cm_DataSize);
         }
 
 
-        void SetIcmpSequence(char* buf)
+        void SetIcmpSequence()
         {
-            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(buf);
-            icmpv4->icmp_sequence = static_cast<USHORT>(GetTickCount());
+            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
+            icmpv4->icmp_sequence = static_cast<USHORT>(GetTickCount64());
         }
 
 
-        USHORT Checksum(USHORT* buffer, int size)
+        USHORT Checksum()
         {
+            USHORT* buf = reinterpret_cast<USHORT*>(m_IcmpBuf);
             unsigned long cksum = 0;
+            int size = cm_PacketLen;
 
             while (size > 1)
             {
-                cksum += *buffer++;
+                cksum += *buf++;
                 size -= sizeof(USHORT);
             }
             if (size)
             {
-                cksum += *(UCHAR*)buffer;
+                cksum += *(UCHAR*)buf;
             }
             cksum = (cksum >> 16) + (cksum & 0xffff);
             cksum += (cksum >> 16);
@@ -179,24 +184,28 @@ namespace Platform::Windows
         }
 
 
-        void ComputeIcmpChecksum(SOCKET s, char* buf, int packetlen, struct addrinfo* dest)
+        void ComputeIcmpChecksum()
         {
-            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(buf);
+            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
             icmpv4->icmp_checksum = 0;
-            icmpv4->icmp_checksum = Checksum((USHORT*)buf, packetlen);
+            icmpv4->icmp_checksum = Checksum();
         }
 
 
-        int PostRecvfrom(SOCKET s, char* buf, int buflen, SOCKADDR* from, int* fromlen, WSAOVERLAPPED* ol)
+        int PostRecvfrom(SOCKADDR* from, int* fromlen)
         {
+            constexpr int MAX_RECV_BUF_LEN = 0xFFFF;  // Max incoming packet size.
+            std::unique_ptr<char[]> recvbuf = std::make_unique<char[]>(MAX_RECV_BUF_LEN); // For received packets
+            int recvbuflen = MAX_RECV_BUF_LEN;        // Length of received packets.
+
             WSABUF wbuf;
-            wbuf.buf = buf;
-            wbuf.len = buflen;
+            wbuf.buf = recvbuf.get();
+            wbuf.len = recvbuflen;
 
             DWORD flags = 0;
             DWORD bytes;
 
-            int rc = WSARecvFrom(s, &wbuf, 1, &bytes, &flags, from, fromlen, ol, nullptr);
+            int rc = WSARecvFrom(m_Sock, &wbuf, 1, &bytes, &flags, from, fromlen, &m_Recvol, nullptr);
             if (rc == SOCKET_ERROR)
             {
                 if (WSAGetLastError() != WSA_IO_PENDING)
@@ -208,7 +217,6 @@ namespace Platform::Windows
             return NO_ERROR;
         }
     public:
-        // traceroute to 'myexampleaddr.com' (128.203.255.124) reverse DNS 'my-reverse-dns.net', 32 hops max, 64 byte packets
         bool Init(const std::string& website)
         {
             // Load Winsock
@@ -216,7 +224,7 @@ namespace Platform::Windows
             int rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
             if (rc != 0) {
                 std::cout << "WSAStartup failed: " << rc << std::endl;
-                return false;
+                return false; // TODO: set error code so WSACleanup won't be called on destruction
             }
 
 
@@ -254,8 +262,7 @@ namespace Platform::Windows
 
 
             int packetLen = sizeof(ICMP_HDR);
-            int dataSize = 64; // size of data to send
-            packetLen += dataSize;
+            packetLen += cm_DataSize;
 
 
             // Allocate the buffer that will conatin the ICMP request
@@ -268,7 +275,7 @@ namespace Platform::Windows
 
 
             // Initialize the ICMP headers
-            InitIcmpHeader(dataSize);
+            InitIcmpHeader();
 
 
             // Bind the socket -- need to do this since we post a receive first
@@ -315,22 +322,15 @@ namespace Platform::Windows
             // Post the first overlapped receive
             SOCKADDR_STORAGE from;
             int fromlen = sizeof(from);
-
-            constexpr int MAX_RECV_BUF_LEN = 0xFFFF;  // Max incoming packet size.
-            char recvbuf[MAX_RECV_BUF_LEN];           // For received packets
-            int recvbuflen = MAX_RECV_BUF_LEN;        // Length of received packets.
-            PostRecvfrom(m_Sock, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &m_Recvol);
-
-            int dataSize = 64;
-            int packetLen = sizeof(ICMP_HDR) + dataSize;
+            PostRecvfrom((SOCKADDR*)&from, &fromlen);
 
             for (int i = 0; i < 4; ++i)
             {
-                SetIcmpSequence(m_IcmpBuf);
-                ComputeIcmpChecksum(m_Sock, m_IcmpBuf, packetLen, m_Dest);
+                SetIcmpSequence();
+                ComputeIcmpChecksum();
 
-                int time = GetTickCount();
-                int rc = sendto(m_Sock, m_IcmpBuf, packetLen, 0, m_Dest->ai_addr, (int)m_Dest->ai_addrlen);
+                const PIndep::Time::TimePoint time = PIndep::Time::GetCurrentTimeH();
+                int rc = sendto(m_Sock, m_IcmpBuf, cm_PacketLen, 0, m_Dest->ai_addr, (int)m_Dest->ai_addrlen);
                 if (rc == SOCKET_ERROR)
                 {
                     std::cerr << "Failed to send packet! Error: " << WSAGetLastError() << std::endl;
@@ -341,7 +341,7 @@ namespace Platform::Windows
 
                 // Wait for a response
                 constexpr int DEFAULT_RECV_TIMEOUT = 1000;
-                rc = WaitForSingleObject((HANDLE)m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT);
+                rc = WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT);
                 if (rc == WAIT_FAILED)
                 {
                     std::cerr << "WaitForSingleObject failed! Error: " << GetLastError() << std::endl;
@@ -360,21 +360,18 @@ namespace Platform::Windows
                     {
                         std::cerr << "WSAGetOverlappedResult failed! Error: " << WSAGetLastError() << std::endl;
                     }
-                    time = GetTickCount() - time;
 
                     WSAResetEvent(m_Recvol.hEvent);
 
-                    std::cout << "Reply from: ";
-                    DNS::PrintAddress((SOCKADDR*)&from, fromlen);
-                    if (time == 0)
-                        printf(": bytes=%d time<1ms TTL=%d\n", dataSize, m_TTL);
-                    else
-                        printf(": bytes=%d time=%dms TTL=%d\n", dataSize, time, m_TTL);
+                    addrinfo inf;
+                    inf.ai_addr = (SOCKADDR*)&from;
+                    inf.ai_addrlen = fromlen;
+                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(time, PIndep::Time::GetCurrentTimeH()));
 
                     if (i < 4 - 1)
                     {
                         fromlen = sizeof(from);
-                        PostRecvfrom(m_Sock, recvbuf, recvbuflen, (SOCKADDR*)&from, &fromlen, &m_Recvol);
+                        PostRecvfrom((SOCKADDR*)&from, &fromlen);
                     }
                 }
                 PIndep::Time::Sleep<std::chrono::seconds>(1);

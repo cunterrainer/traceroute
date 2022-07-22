@@ -89,7 +89,13 @@ namespace PIndep
     namespace Time
     {
         using TimePoint = std::chrono::high_resolution_clock::time_point;
+        // TODO: switch linux to using GetCurrentTimeH (GetCurrentTime is a macro defined in WinBase.h)
         static TimePoint GetCurrentTime() noexcept
+        {
+            return std::chrono::high_resolution_clock::now();
+        }
+
+        static TimePoint GetCurrentTimeH() noexcept
         {
             return std::chrono::high_resolution_clock::now();
         }
@@ -112,6 +118,7 @@ namespace PIndep
     {
         void PrintRecv(size_t ttl, const std::string& ipAddPckRecv, double rtt) noexcept
         {
+            // TODO: add bytes received
             // 15 == max length for ipv4 address
             size_t spaces = 15 - ipAddPckRecv.size();
             std::string buffer(spaces, ' ');
