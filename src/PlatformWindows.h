@@ -275,6 +275,10 @@ namespace Platform::Windows
             if(m_WSAStarted)
                 WSACleanup();
         }
+        constexpr Socket(const Socket&) = delete;
+        constexpr Socket(const Socket&&) = delete;
+        constexpr Socket& operator=(const Socket&) = delete;
+        constexpr Socket&& operator=(const Socket&&) = delete;
 
 
         inline uint8_t Ping(const std::string_view& website) noexcept

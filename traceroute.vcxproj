@@ -119,13 +119,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="tracert.cpp" />
+    <ClCompile Include="src\tracert.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Platform.h" />
-    <ClInclude Include="PlatformLinux.h" />
-    <ClInclude Include="PlatformWindows.h" />
-    <ClInclude Include="PlatIndep.h" />
+    <ClInclude Include="src\Platform.h" />
+    <ClInclude Include="src\PlatformLinux.h" />
+    <ClInclude Include="src\PlatformWindows.h" />
+    <ClInclude Include="src\PlatIndep.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
