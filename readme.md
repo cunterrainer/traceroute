@@ -18,7 +18,7 @@ traceroute to 'myexampleaddr.com' (128.203.255.124) reverse DNS 'my-reverse-dns.
 Traceing time:   7075.42 ms | 7.07541 sec
 Traceroute time: 7103.23 ms | 7.10323 sec
 ```
-This are just some randomly generated sample addresses
+This are randomly generated sample addresses
 
 # Status
 
@@ -35,40 +35,58 @@ Current implementation status: It's a ping just without the ability to trace the
 
 # Build
 
-## Linux
+This project uses premake as it's build system. The premake5 binaries for windows and linux are already provided.  
+For additional information use:
+```
+./vendor/premake5 --help
+```
+
+## Clone
 
 ```
-make [conf=]
+git clone https://github.com/pyvyx/traceroute.git
 ```
-conf is a parameter used to control optimization.  
-conf=d: Debugging build, with [-g && -ggdb] flags  
-conf=of: -Ofast  
-conf= or just use without conf for [-O2]
-
-## Windows  
-
-Simply use the provided .sln for visual studio.
-
-## Others 
-
-If you want to use something else it's pritty trivial since the project consists only of a single .cpp file, the rest is defined in header files. Simply compile the .cpp file and be good to go.  
-
-## Errors  
-
-If you get errors regarding platform dependend includes etc. make sure to
 ```
-#define __linux__
-#undef  _WIN32
+cd traceroute
 ```
-when compiling for linux or
-```
-#define _WIN32
-#undef  __linux__
-```
-when compiling for windows.
 
-Even better than defining this in each header seperately, is to use your compiler specific define flag.  
-GCC & Clang:
+## Visual Studio
+
 ```
--D __linux__ | -D _WIN32
+vendor\premake5.exe vs2022
 ```
+This should have generated a .sln file
+
+## Make
+
+### Linux
+
+```
+./vendor/premake5 gmake [cc]
+```
+
+### Windows
+
+```
+vendor\premake5.exe gmake [cc]
+```
+
+GCC should already be the default compiler, however you can explicitly specify it if you'd like.  
+GCC:   --cc=gcc  
+Clang: --cc=clang
+
+### Build
+
+```
+make config=<configuration>
+```
+Configurations:
+ - debug_x86
+ - debug_x64 (default, the same as just using `make`)
+ - release_x86
+ - release_x64
+
+```
+make help
+```
+for additional information
