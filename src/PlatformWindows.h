@@ -98,7 +98,7 @@ namespace Platform::Windows
             int option = IP_TTL;
             int rc = NO_ERROR;
             
-            rc = setsockopt(m_Sock, optlevel, option, (const char*)&m_TTL, sizeof(m_TTL));
+            rc = setsockopt(m_Sock, optlevel, option, reinterpret_cast<const char*>(&m_TTL), sizeof(m_TTL));
             if (rc == SOCKET_ERROR)
                 std::cerr << "Failed to set TTL: " << m_TTL << " | Error: " << WSAGetLastError() << std::endl;
             return rc;
@@ -140,7 +140,7 @@ namespace Platform::Windows
             while (size > 1)
             {
                 cksum += *buf++;
-                size -= sizeof(USHORT);
+                size -= static_cast<int>(sizeof(USHORT));
             }
             if (size)
             {
@@ -148,7 +148,8 @@ namespace Platform::Windows
             }
             cksum = (cksum >> 16) + (cksum & 0xffff);
             cksum += (cksum >> 16);
-            return (USHORT)(~cksum);
+            cksum = ~cksum;
+            return static_cast<USHORT>(cksum);
         }
 
 
@@ -291,7 +292,7 @@ namespace Platform::Windows
 
             // sendto(m_SocketFd, &m_PingPkt, sizeof(m_PingPkt), MSG_WAITALL, (sockaddr*)m_AddrCon, sizeof(*m_AddrCon))
 
-            PostRecvfrom((SOCKADDR*)&from, &fromlen);
+            PostRecvfrom(reinterpret_cast<SOCKADDR*>(&from), &fromlen);
             for (uint32_t i = 0; i < 32; ++i)
             {
                 SetIcmpSequence();
@@ -309,7 +310,7 @@ namespace Platform::Windows
                 // Wait for a response
                 constexpr uint16_t DEFAULT_RECV_TIMEOUT = 6000;
                 rc = static_cast<int>(WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT));
-                if (rc == WAIT_FAILED)
+                if (static_cast<DWORD>(rc) == WAIT_FAILED)
                 {
                     std::cerr << "WaitForSingleObject failed! Error: " << GetLastError() << std::endl;
                     return EXIT_FAILURE;
@@ -331,14 +332,14 @@ namespace Platform::Windows
                     WSAResetEvent(m_Recvol.hEvent);
 
                     addrinfo inf;
-                    inf.ai_addr = (SOCKADDR*)&from;
+                    inf.ai_addr = reinterpret_cast<SOCKADDR*>(&from);
                     inf.ai_addrlen = static_cast<size_t>(fromlen);
-                    //PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
+                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
 
                     if (i < 4 - 1)
                     {
                         fromlen = sizeof(from);
-                        PostRecvfrom((SOCKADDR*)&from, &fromlen);
+                        PostRecvfrom(reinterpret_cast<SOCKADDR*>(&from), &fromlen);
                     }
                 }
                 PIndep::Time::Sleep<std::chrono::seconds>(1);

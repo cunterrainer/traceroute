@@ -41,7 +41,7 @@ filter "system:windows"
 filter "system:linux"
     defines "LINUX"
 
-    
+
 filter "toolset:msc*"
     warnings "Everything"
     externalwarnings "Default"
@@ -54,6 +54,65 @@ filter "toolset:msc*"
         "4711", -- C4711 function 'function' selected for automatic inline expansion
     }
     buildoptions { "/sdl" }
+
+filter { "toolset:gcc* or toolset:clang*" }
+    enablewarnings {
+        "pedantic",
+        "cast-align",
+        "cast-qual",
+        "ctor-dtor-privacy",
+        "disabled-optimization",
+        "format=2",
+        "init-self",
+        "missing-declarations",
+        "missing-include-dirs",
+        "old-style-cast",
+        "overloaded-virtual",
+        "redundant-decls",
+        "shadow",
+        "sign-conversion",
+        "sign-promo",
+        "strict-overflow=5",
+        "switch-default",
+        "undef",
+        "uninitialized",
+        "unreachable-code",
+        "unused",
+        "alloca",
+        "conversion",
+        "deprecated",
+        "format-security",
+        "null-dereference",
+        "stack-protector",
+        "vla",
+        "shift-overflow"
+    }
+
+filter "toolset:gcc*"
+    warnings "Extra"
+    externalwarnings "Off"
+    linkgroups "on" -- activate position independent linking
+    enablewarnings {
+        "noexcept",
+        "strict-null-sentinel",
+        "array-bounds=2",
+        "duplicated-branches",
+        "duplicated-cond",
+        "logical-op",
+        "arith-conversion",
+        "stringop-overflow=4",
+        "implicit-fallthrough=3",
+        "trampolines"
+    }
+
+filter "toolset:clang*"
+        warnings "Extra"
+        externalwarnings "Everything"
+        enablewarnings {
+            "array-bounds",
+            "long-long",
+            "implicit-fallthrough", 
+        }
 
 filter {}
 
