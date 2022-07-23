@@ -3,6 +3,7 @@
 BIN/
 
 *.sln
+*.vcxproj
 *.vcxproj.*
 *.make
 Makefile
