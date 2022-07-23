@@ -344,7 +344,7 @@ namespace Platform::Windows
 
 
     // [[maybe_unused]] attribute because comp keeps complaining, will be removed eventually
-    static int [[maybe_unused]] Main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
+    static int Main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
     {
         // fra16s52-in-f4.1e100.net
         const std::string website = "www.google.com";
