@@ -12,7 +12,7 @@ namespace PIndep
 {
     namespace CLA
     {
-        static std::string LowerStr(const std::string& str) noexcept
+        static inline std::string LowerStr(const std::string& str) noexcept
         {
             std::string strl(str);
             for (char& c : strl)
@@ -20,7 +20,7 @@ namespace PIndep
             return strl;
         }
 
-        static void PrintHelp(const char* name) noexcept
+        static inline void PrintHelp(const char* name) noexcept
         {
             std::cout << "\nUsage: " << name << " 'website' [options]\n";
             std::cout << "-h or --help:             print this help message\n";
@@ -34,7 +34,7 @@ namespace PIndep
             size_t hops = 32;
         };
 
-        static std::optional<UInput> Handler(int argc, char** argv) noexcept
+        static inline std::optional<UInput> Handler(int argc, char** argv) noexcept
         {
             UInput ip;
             if (argc == 1)
@@ -95,19 +95,19 @@ namespace PIndep
             return std::chrono::high_resolution_clock::now();
         }
 
-        static TimePoint CurrentTime() noexcept
+        static inline TimePoint CurrentTime() noexcept
         {
             return std::chrono::high_resolution_clock::now();
         }
 
         template<class T>
-        static double DeltaTime(const TimePoint& t1, const TimePoint& t2) noexcept
+        static constexpr double DeltaTime(const TimePoint& t1, const TimePoint& t2) noexcept
         {
             return std::chrono::duration<double, T>(t1 - t2).count();
         }
 
         template<class T>
-        static void Sleep(size_t time) noexcept
+        static constexpr void Sleep(size_t time) noexcept
         {
             std::this_thread::sleep_for(T(time));
         }
@@ -116,7 +116,7 @@ namespace PIndep
 
     namespace IO
     {
-        void PrintRecv(size_t ttl, const std::string& ipAddPckRecv, double rtt) noexcept
+        static inline void PrintRecv(size_t ttl, const std::string& ipAddPckRecv, double rtt) noexcept
         {
             // TODO: add bytes received
             // 15 == max length for ipv4 address

@@ -19,7 +19,7 @@ namespace Platform::Windows
 {
     namespace DNS
     {
-        static addrinfo* ResolveAddress(const char* addr, const char* port, int af, int type, int proto) noexcept
+        static inline addrinfo* ResolveAddress(const char* addr, const char* port, int af, int type, int proto) noexcept
         {
             addrinfo hints;
             ZeroMemory(&hints, sizeof(hints));
@@ -40,7 +40,7 @@ namespace Platform::Windows
 
 
         // get ip as string
-        static std::optional<std::string> GetAddress(const addrinfo* aif) noexcept
+        static inline std::optional<std::string> GetAddress(const addrinfo* aif) noexcept
         {
             std::array<char, NI_MAXHOST> host;
             std::array<char, NI_MAXSERV> serv;
@@ -55,7 +55,7 @@ namespace Platform::Windows
         }
 
 
-        static std::optional<std::string> ReverseLookup(const addrinfo* aif) noexcept
+        static inline std::optional<std::string> ReverseLookup(const addrinfo* aif) noexcept
         {
             std::array<char, NI_MAXHOST> host;
 
@@ -97,8 +97,8 @@ namespace Platform::Windows
             int optlevel = IPPROTO_IP;
             int option = IP_TTL;
             int rc = NO_ERROR;
-
-            rc = setsockopt(m_Sock, optlevel, option, (char*)&m_TTL, sizeof(m_TTL));
+            
+            rc = setsockopt(m_Sock, optlevel, option, (const char*)&m_TTL, sizeof(m_TTL));
             if (rc == SOCKET_ERROR)
                 std::cerr << "Failed to set TTL: " << m_TTL << " | Error: " << WSAGetLastError() << std::endl;
             return rc;
@@ -179,6 +179,28 @@ namespace Platform::Windows
             return NO_ERROR;
         }
     public:
+        constexpr Socket() noexcept { m_Recvol.hEvent = WSA_INVALID_EVENT; }
+        inline ~Socket() noexcept
+        {
+            if (m_Dest)
+                freeaddrinfo(m_Dest);
+            if (m_Local)
+                freeaddrinfo(m_Local);
+            if (m_Sock != INVALID_SOCKET)
+                closesocket(m_Sock);
+            if (m_Recvol.hEvent != WSA_INVALID_EVENT)
+                WSACloseEvent(m_Recvol.hEvent);
+            if (m_IcmpBuf)
+                HeapFree(GetProcessHeap(), 0, m_IcmpBuf);
+            if (m_WSAStarted)
+                WSACleanup();
+        }
+        constexpr Socket(const Socket&) = delete;
+        constexpr Socket(const Socket&&) = delete;
+        constexpr Socket& operator=(const Socket&) = delete;
+        constexpr Socket&& operator=(const Socket&&) = delete;
+
+
         inline bool Init(const std::string_view& website) noexcept
         {
             // Load Winsock
@@ -206,7 +228,7 @@ namespace Platform::Windows
 
 
             // Get the bind address
-            m_Local = DNS::ResolveAddress(nullptr, "0", AF_INET, 0, 0);
+            m_Local = DNS::ResolveAddress(nullptr, "0", addressFamiliy, 0, 0);
             if (m_Local == nullptr)
                 return false;
 
@@ -247,7 +269,6 @@ namespace Platform::Windows
 
 
             // Setup the receive operation
-            m_Recvol.hEvent = WSA_INVALID_EVENT;
             memset(&m_Recvol, 0, sizeof(m_Recvol));
             m_Recvol.hEvent = WSACreateEvent();
             if (m_Recvol.hEvent == WSA_INVALID_EVENT) {
@@ -259,29 +280,7 @@ namespace Platform::Windows
         }
 
 
-        constexpr Socket() noexcept { m_Recvol.hEvent = WSA_INVALID_EVENT; }
-        inline ~Socket() noexcept
-        {
-            if (m_Dest)
-                freeaddrinfo(m_Dest);
-            if (m_Local)
-                freeaddrinfo(m_Local);
-            if (m_Sock != INVALID_SOCKET)
-                closesocket(m_Sock);
-            if (m_Recvol.hEvent != WSA_INVALID_EVENT)
-                WSACloseEvent(m_Recvol.hEvent);
-            if (m_IcmpBuf)
-                HeapFree(GetProcessHeap(), 0, m_IcmpBuf);
-            if(m_WSAStarted)
-                WSACleanup();
-        }
-        constexpr Socket(const Socket&) = delete;
-        constexpr Socket(const Socket&&) = delete;
-        constexpr Socket& operator=(const Socket&) = delete;
-        constexpr Socket&& operator=(const Socket&&) = delete;
-
-
-        inline uint8_t Ping(const std::string_view& website) noexcept
+        inline int Ping(const std::string_view& website) noexcept
         {
             if (!Init(website))
                 return EXIT_FAILURE;
@@ -290,6 +289,8 @@ namespace Platform::Windows
             SOCKADDR_STORAGE from;
             int fromlen = sizeof(from);
 
+            // sendto(m_SocketFd, &m_PingPkt, sizeof(m_PingPkt), MSG_WAITALL, (sockaddr*)m_AddrCon, sizeof(*m_AddrCon))
+
             PostRecvfrom((SOCKADDR*)&from, &fromlen);
             for (uint32_t i = 0; i < 32; ++i)
             {
@@ -297,7 +298,7 @@ namespace Platform::Windows
                 ComputeIcmpChecksum();
 
                 const PIndep::Time::TimePoint time = PIndep::Time::CurrentTime();
-                int rc = sendto(m_Sock, m_IcmpBuf, cm_PacketLen, 0, m_Dest->ai_addr, (int)m_Dest->ai_addrlen);
+                int rc = sendto(m_Sock, m_IcmpBuf, cm_PacketLen, 0, m_Dest->ai_addr, static_cast<int>(m_Dest->ai_addrlen));
                 if (rc == SOCKET_ERROR)
                 {
                     std::cerr << "Failed to send packet! Error: " << WSAGetLastError() << std::endl;
@@ -332,7 +333,7 @@ namespace Platform::Windows
                     addrinfo inf;
                     inf.ai_addr = (SOCKADDR*)&from;
                     inf.ai_addrlen = fromlen;
-                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
+                    //PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
 
                     if (i < 4 - 1)
                     {
@@ -345,7 +346,7 @@ namespace Platform::Windows
             return EXIT_SUCCESS;
         }
     };
-
+    
 
     // [[maybe_unused]] attribute because comp keeps complaining, will be removed eventually
     static int Main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
