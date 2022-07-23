@@ -135,6 +135,6 @@ project "traceroute"
         "src/**.h"
     }
 
-    links {
-        "Ws2_32"
-    }
+    if os.host() == "windows" then
+        links "Ws2_32"
+    end

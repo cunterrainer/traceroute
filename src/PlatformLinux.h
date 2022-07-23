@@ -48,9 +48,9 @@ namespace Platform::Linux
             const std::string ipAddress(inet_ntoa(*reinterpret_cast<in_addr*>(hostEntity->h_addr)));
 
             bzero(&addrCon, sizeof(sockaddr_in));
-            addrCon.sin_family = hostEntity->h_addrtype;
+            addrCon.sin_family = static_cast<sa_family_t>(hostEntity->h_addrtype);
             addrCon.sin_port = htons(PORT_NO);
-            addrCon.sin_addr.s_addr = *reinterpret_cast<long*>(hostEntity->h_addr);
+            addrCon.sin_addr.s_addr = *reinterpret_cast<in_addr_t*>(hostEntity->h_addr);
 
             return ipAddress;
         }
@@ -101,10 +101,10 @@ namespace Platform::Linux
             for (sum = 0; len > 1; len -= 2)
                 sum += *buf++;
             if (len == 1)
-                sum += *(unsigned char*)buf;
+                sum += *reinterpret_cast<unsigned char*>(buf);
             sum = (sum >> 16) + (sum & 0xFFFF);
             sum += (sum >> 16);
-            result = ~sum;
+            result = static_cast<unsigned short>(~sum);
             return result;
         }
 
@@ -115,12 +115,11 @@ namespace Platform::Linux
             bzero(&pckt, sizeof(pckt)); // fill packet with 0 bytes
 
             pckt.hdr.type = ICMP_ECHO;
-            //pckt.hdr.un.echo.id = htons(1);
-            pckt.hdr.un.echo.id = getpid();
+            pckt.hdr.un.echo.id = static_cast<uint16_t>(getpid());
 
             long unsigned int i;
             for (i = 0; i < sizeof(pckt.msg) - 1; i++)
-                pckt.msg[i] = i + '0';
+                pckt.msg[i] = static_cast<char>(i + '0');
 
             pckt.msg[i] = 0;
             pckt.hdr.un.echo.sequence = 0;
@@ -134,8 +133,8 @@ namespace Platform::Linux
             PIndep::Time::Sleep<std::chrono::microseconds>(PING_SLEEP_RATE);
 
             //send packet
-            const PIndep::Time::TimePoint timeStart = PIndep::Time::GetCurrentTime();
-            if (sendto(m_SocketFd, &m_PingPkt, sizeof(m_PingPkt), MSG_WAITALL, (sockaddr*)m_AddrCon, sizeof(*m_AddrCon)) <= 0)
+            const PIndep::Time::TimePoint timeStart = PIndep::Time::CurrentTime();
+            if (sendto(m_SocketFd, &m_PingPkt, sizeof(m_PingPkt), MSG_WAITALL, reinterpret_cast<sockaddr*>(m_AddrCon), sizeof(*m_AddrCon)) <= 0)
             {
                 std::cout << m_TTL << " Packet Sending Failed! TTL: " << m_TTL << std::endl;
                 return std::nullopt;
@@ -146,16 +145,16 @@ namespace Platform::Linux
             int addr_len = sizeof(r_addr);
             PingPkt recvPkt;
 
-            if (recvfrom(m_SocketFd, &recvPkt, sizeof(recvPkt), MSG_WAITALL, (sockaddr*)&r_addr, (socklen_t*)&addr_len) <= 0)
+            if (recvfrom(m_SocketFd, &recvPkt, sizeof(recvPkt), MSG_WAITALL, reinterpret_cast<sockaddr*>(&r_addr), reinterpret_cast<socklen_t*>(&addr_len)) <= 0)
             {
                 //if(errno != EAGAIN)
                 {
-                    std::cout << m_TTL << " Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
+                    std::cout << m_TTL << ". Packet receive failed! TTL: " << m_TTL << " Error: " << strerror(errno) << '\n';
                     return std::nullopt;
                 }
             }
 
-            const double rttTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), timeStart);
+            const double rttTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), timeStart);
             const std::string ipAddPckRecv = std::string(inet_ntoa(r_addr.sin_addr));
             PIndep::IO::PrintRecv(m_TTL, ipAddPckRecv, rttTime);
             return ipAddPckRecv;
@@ -197,14 +196,14 @@ namespace Platform::Linux
         // returns the time needed to traceroute
         double Trace(size_t hops) noexcept
         {
-            const PIndep::Time::TimePoint startTrace = PIndep::Time::GetCurrentTime();
+            const PIndep::Time::TimePoint startTrace = PIndep::Time::CurrentTime();
 
             // setting timeout of recv setting
-            const timeval tv_out{ .tv_sec = RECV_TIMEOUT, .tv_usec = 0 };
-            if (setsockopt(m_SocketFd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof(tv_out)) != 0)
+            const timeval tv_out{ /*.tv_sec=*/RECV_TIMEOUT, /*.tv_usec=*/0 };
+            if (setsockopt(m_SocketFd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv_out), sizeof(tv_out)) != 0)
             {
                 std::cerr << "Failed to set receive timeout! Timeout: [" << RECV_TIMEOUT << "] sec/s\n";
-                return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTrace);
+                return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), startTrace);
             }
 
             for (size_t i = 0; i < hops; ++i)
@@ -212,7 +211,7 @@ namespace Platform::Linux
                 if (setsockopt(m_SocketFd, SOL_IP, IP_TTL, &m_TTL, sizeof(m_TTL)) != 0)
                 {
                     std::cerr << "Failed to set TTL socket options! TTL: " << m_TTL << std::endl;
-                    return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTrace);
+                    return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), startTrace);
                 }
                 const std::optional<std::string> ipAddRecv = Ping();
                 ++m_TTL;
@@ -221,11 +220,11 @@ namespace Platform::Linux
                     continue;
                 if (ipAddRecv.value() == std::string(m_IpAddress))
                 {
-                    return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTrace);
+                    return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), startTrace);
                 }
             }
             std::cout << "\nCouldn't trace route to destination in " << hops << " hops" << std::endl;
-            return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTrace);
+            return PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), startTrace);
         }
     };
 
@@ -236,7 +235,7 @@ namespace Platform::Linux
         if (!uip.has_value())
             return EXIT_SUCCESS;
 
-        const PIndep::Time::TimePoint startTime = PIndep::Time::GetCurrentTime();
+        const PIndep::Time::TimePoint startTime = PIndep::Time::CurrentTime();
 
         sockaddr_in addrCon;
         const std::string ipAddress = DNS::Lookup(uip.value().hostname, addrCon);
@@ -250,7 +249,7 @@ namespace Platform::Linux
             return EXIT_SUCCESS;
 
         const double traceTime = socket.Trace(uip.value().hops);
-        const double endTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTime(), startTime);
+        const double endTime = PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), startTime);
         std::cout << "\nTraceing time:   " << traceTime << " ms | " << (traceTime / 1000.0) << " sec\n";
         std::cout << "Traceroute time: " << endTime << " ms | " << (endTime / 1000.0) << " sec" << std::endl;
         return EXIT_SUCCESS;
