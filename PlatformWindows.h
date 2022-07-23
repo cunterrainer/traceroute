@@ -4,6 +4,9 @@
 // c++std
 #include <iostream>
 #include <optional>
+#include <array>
+#include <string>
+#include <string_view>
 
 // platform
 #include <WinSock2.h>
@@ -16,7 +19,7 @@ namespace Platform::Windows
 {
     namespace DNS
     {
-        static addrinfo* ResolveAddress(const char* addr, const char* port, int af, int type, int proto)
+        static addrinfo* ResolveAddress(const char* addr, const char* port, int af, int type, int proto) noexcept
         {
             addrinfo hints;
             ZeroMemory(&hints, sizeof(hints));
@@ -26,8 +29,7 @@ namespace Platform::Windows
             hints.ai_protocol = proto;
 
             addrinfo* result = nullptr;
-            INT dwRetval = getaddrinfo(addr, port, &hints, &result);
-            if (dwRetval != 0)
+            if (getaddrinfo(addr, port, &hints, &result) != 0)
             {
                 std::cerr << "Failed to resolve hostname: '" << addr << "'\n";
                 return nullptr;
@@ -35,67 +37,34 @@ namespace Platform::Windows
 
             return result;
         }
-        
-
-        static int PrintAddress(const SOCKADDR* sa, int salen)
-        {
-            char host[NI_MAXHOST];
-            char serv[NI_MAXSERV];
-
-            int hostlen = NI_MAXHOST;
-            int servlen = NI_MAXSERV;
-
-            int rc = getnameinfo(sa, salen, host, hostlen, serv, servlen, NI_NUMERICHOST | NI_NUMERICSERV);
-            if (rc != 0)
-            {
-                std::cerr << "Failed to get name info!\n";
-                return rc;
-            }
-
-            // If port is zero then don't print it
-            if (strcmp(serv, "0") != 0)
-            {
-                if (sa->sa_family == AF_INET)
-                    std::cout << "[" << host << "]:" << serv;
-                else
-                    std::cout << host << ':' << serv;
-            }
-            else
-                std::cout << host;
-            return NO_ERROR;
-        }
 
 
         // get ip as string
-        static std::optional<std::string> GetAddress(const addrinfo* aif)
+        static std::optional<std::string> GetAddress(const addrinfo* aif) noexcept
         {
-            char host[NI_MAXHOST];
-            char serv[NI_MAXSERV];
+            std::array<char, NI_MAXHOST> host;
+            std::array<char, NI_MAXSERV> serv;
 
-            constexpr int hostlen = NI_MAXHOST;
-            constexpr int servlen = NI_MAXSERV;
-
-            if (getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host, hostlen, serv, servlen, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
+            if (getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host.data(), NI_MAXHOST, serv.data(), NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
             {
                 std::cerr << "Failed to get name info!\n";
                 return std::nullopt;
             }
 
-            return std::string(host);
+            return std::string(host.data());
         }
 
 
-        static std::optional<std::string> ReverseLookup(const addrinfo* aif)
+        static std::optional<std::string> ReverseLookup(const addrinfo* aif) noexcept
         {
-            char host[NI_MAXHOST];
+            std::array<char, NI_MAXHOST> host;
 
-            int rc = getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host, NI_MAXHOST, nullptr, 0, 0);
-            if (rc != 0)
+            if (int rc = getnameinfo(aif->ai_addr, static_cast<int>(aif->ai_addrlen), host.data(), NI_MAXHOST, nullptr, 0, 0) != 0)
             {
                 std::cerr << "getnameinfo failed: " << rc << std::endl;
                 return std::nullopt;
             }
-            return std::string(host);
+            return std::string(host.data());
         }
     }
 
@@ -112,17 +81,18 @@ namespace Platform::Windows
             unsigned short  icmp_sequence;
         };
 
-        static constexpr int cm_DataSize = 64; // bytes of data to sent
-        static constexpr int cm_PacketLen = sizeof(ICMP_HDR) + cm_DataSize;
+        static constexpr uint8_t cm_DataSize = 64; // bytes of data to sent
+        static constexpr uint8_t cm_PacketLen = sizeof(ICMP_HDR) + cm_DataSize;
     private:
         SOCKET m_Sock = INVALID_SOCKET;
         addrinfo* m_Dest  = nullptr;
         addrinfo* m_Local = nullptr;
         char* m_IcmpBuf   = nullptr;
-        int m_TTL = 32;
-        WSAOVERLAPPED m_Recvol;
+        WSAOVERLAPPED m_Recvol = WSAOVERLAPPED();
+        uint32_t m_TTL = 32;
+        bool m_WSAStarted = false;
     private:
-        int SetTTL()
+        inline int SetTTL() const noexcept
         {
             int optlevel = IPPROTO_IP;
             int option = IP_TTL;
@@ -135,16 +105,16 @@ namespace Platform::Windows
         }
 
 
-        void InitIcmpHeader()
+        inline void InitIcmpHeader() const noexcept
         {
-            ICMP_HDR* icmpHdr = (ICMP_HDR*)m_IcmpBuf;
+            ICMP_HDR* const icmpHdr = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
 
             constexpr int ICMPV4_ECHO_REQUEST_TYPE = 8;
             constexpr int ICMPV4_ECHO_REQUEST_CODE = 0;
 
             icmpHdr->icmp_type = ICMPV4_ECHO_REQUEST_TYPE;   // Request an ICMP echo
             icmpHdr->icmp_code = ICMPV4_ECHO_REQUEST_CODE;
-            icmpHdr->icmp_id = (USHORT)GetCurrentProcessId();
+            icmpHdr->icmp_id = static_cast<USHORT>(GetCurrentProcessId());
             icmpHdr->icmp_checksum = 0;
             icmpHdr->icmp_sequence = 0;
 
@@ -154,14 +124,14 @@ namespace Platform::Windows
         }
 
 
-        void SetIcmpSequence()
+        inline void SetIcmpSequence() const noexcept
         {
-            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
+            ICMP_HDR* const icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
             icmpv4->icmp_sequence = static_cast<USHORT>(GetTickCount64());
         }
 
 
-        USHORT Checksum()
+        inline USHORT Checksum() const noexcept
         {
             USHORT* buf = reinterpret_cast<USHORT*>(m_IcmpBuf);
             unsigned long cksum = 0;
@@ -174,7 +144,7 @@ namespace Platform::Windows
             }
             if (size)
             {
-                cksum += *(UCHAR*)buf;
+                cksum += *reinterpret_cast<UCHAR*>(buf);
             }
             cksum = (cksum >> 16) + (cksum & 0xffff);
             cksum += (cksum >> 16);
@@ -182,59 +152,54 @@ namespace Platform::Windows
         }
 
 
-        void ComputeIcmpChecksum()
+        inline void ComputeIcmpChecksum() const noexcept
         {
-            ICMP_HDR* icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
-            icmpv4->icmp_checksum = 0;
+            ICMP_HDR* const icmpv4 = reinterpret_cast<ICMP_HDR*>(m_IcmpBuf);
             icmpv4->icmp_checksum = Checksum();
         }
 
 
-        int PostRecvfrom(SOCKADDR* from, int* fromlen)
+        inline int PostRecvfrom(SOCKADDR* from, int* fromlen) noexcept
         {
-            constexpr int MAX_RECV_BUF_LEN = 0xFFFF;  // Max incoming packet size.
+            constexpr uint16_t MAX_RECV_BUF_LEN = 0xFFFF;  // Max incoming packet size. | Length of received packets.
             std::unique_ptr<char[]> recvbuf = std::make_unique<char[]>(MAX_RECV_BUF_LEN); // For received packets
-            int recvbuflen = MAX_RECV_BUF_LEN;        // Length of received packets.
 
             WSABUF wbuf;
             wbuf.buf = recvbuf.get();
-            wbuf.len = recvbuflen;
+            wbuf.len = MAX_RECV_BUF_LEN;
 
             DWORD flags = 0;
-            DWORD bytes;
+            DWORD bytes = 0;
 
-            int rc = WSARecvFrom(m_Sock, &wbuf, 1, &bytes, &flags, from, fromlen, &m_Recvol, nullptr);
-            if (rc == SOCKET_ERROR)
+            if (WSARecvFrom(m_Sock, &wbuf, 1, &bytes, &flags, from, fromlen, &m_Recvol, nullptr) == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
             {
-                if (WSAGetLastError() != WSA_IO_PENDING)
-                {
-                    std::cerr << "WSARecvFrom failed! Error: " << WSAGetLastError() << std::endl;
-                    return SOCKET_ERROR;
-                }
+                std::cerr << "WSARecvFrom failed! Error: " << WSAGetLastError() << std::endl;
+                return SOCKET_ERROR;
             }
             return NO_ERROR;
         }
     public:
-        bool Init(const std::string& website)
+        inline bool Init(const std::string_view& website) noexcept
         {
             // Load Winsock
             WSADATA wsaData;
             int rc = WSAStartup(MAKEWORD(2, 2), &wsaData);
             if (rc != 0) {
                 std::cout << "WSAStartup failed: " << rc << std::endl;
-                return false; // TODO: set error code so WSACleanup won't be called on destruction
+                return false;
             }
+            m_WSAStarted = true;
 
 
-            m_Dest = DNS::ResolveAddress(website.c_str(), "0", AF_INET, 0, 0);
+            m_Dest = DNS::ResolveAddress(website.data(), "0", AF_INET, 0, 0);
             if (m_Dest == nullptr) 
                 return false;
-            int addressFamiliy = m_Dest->ai_family;
-            int protocol = IPPROTO_ICMP;
+            const int addressFamiliy = m_Dest->ai_family;
+            const int protocol = IPPROTO_ICMP;
 
 
-            std::optional<std::string> ipAddress = DNS::GetAddress(m_Dest);
-            std::optional<std::string> reverseDNS = DNS::ReverseLookup(m_Dest);
+            const std::optional<std::string> ipAddress = DNS::GetAddress(m_Dest);
+            const std::optional<std::string> reverseDNS = DNS::ReverseLookup(m_Dest);
             if (!ipAddress.has_value() || !reverseDNS.has_value())
                 return false;
             std::cout << "traceroute to '" << website << "' (" << ipAddress.value() << ") reverse DNS '" << reverseDNS.value() << "'" << std::endl;
@@ -294,7 +259,8 @@ namespace Platform::Windows
         }
 
 
-        ~Socket()
+        constexpr Socket() noexcept { m_Recvol.hEvent = WSA_INVALID_EVENT; }
+        inline ~Socket() noexcept
         {
             if (m_Dest)
                 freeaddrinfo(m_Dest);
@@ -306,42 +272,42 @@ namespace Platform::Windows
                 WSACloseEvent(m_Recvol.hEvent);
             if (m_IcmpBuf)
                 HeapFree(GetProcessHeap(), 0, m_IcmpBuf);
-
-            WSACleanup();
+            if(m_WSAStarted)
+                WSACleanup();
         }
 
 
-        void Ping()
+        inline uint8_t Ping(const std::string_view& website) noexcept
         {
+            if (!Init(website))
+                return EXIT_FAILURE;
+
             // Post the first overlapped receive
             SOCKADDR_STORAGE from;
             int fromlen = sizeof(from);
-            PostRecvfrom((SOCKADDR*)&from, &fromlen);
 
-            for (int i = 0; i < 4; ++i)
+            PostRecvfrom((SOCKADDR*)&from, &fromlen);
+            for (uint32_t i = 0; i < 32; ++i)
             {
                 SetIcmpSequence();
                 ComputeIcmpChecksum();
 
-                m_TTL = 1;
-                SetTTL();
-                ++m_TTL;
-                const PIndep::Time::TimePoint time = PIndep::Time::GetCurrentTimeH();
+                const PIndep::Time::TimePoint time = PIndep::Time::CurrentTime();
                 int rc = sendto(m_Sock, m_IcmpBuf, cm_PacketLen, 0, m_Dest->ai_addr, (int)m_Dest->ai_addrlen);
                 if (rc == SOCKET_ERROR)
                 {
                     std::cerr << "Failed to send packet! Error: " << WSAGetLastError() << std::endl;
-                    return;
+                    return EXIT_FAILURE;
                 }
 
 
                 // Wait for a response
-                constexpr int DEFAULT_RECV_TIMEOUT = 1000;
+                constexpr uint16_t DEFAULT_RECV_TIMEOUT = 1000;
                 rc = WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT);
                 if (rc == WAIT_FAILED)
                 {
                     std::cerr << "WaitForSingleObject failed! Error: " << GetLastError() << std::endl;
-                    return;
+                    return EXIT_FAILURE;
                 }
                 else if (rc == WAIT_TIMEOUT)
                 {
@@ -349,20 +315,20 @@ namespace Platform::Windows
                 }
                 else
                 {
-                    DWORD bytes;
-                    DWORD flags;
+                    DWORD bytes = 0;
+                    DWORD flags = 0;
                     rc = WSAGetOverlappedResult(m_Sock, &m_Recvol, &bytes, FALSE, &flags);
                     if (rc == FALSE)
                     {
                         std::cerr << "WSAGetOverlappedResult failed! Error: " << WSAGetLastError() << std::endl;
                     }
-
+                    
                     WSAResetEvent(m_Recvol.hEvent);
 
                     addrinfo inf;
                     inf.ai_addr = (SOCKADDR*)&from;
                     inf.ai_addrlen = fromlen;
-                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::GetCurrentTimeH(), time));
+                    PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
 
                     if (i < 4 - 1)
                     {
@@ -372,19 +338,18 @@ namespace Platform::Windows
                 }
                 PIndep::Time::Sleep<std::chrono::seconds>(1);
             }
+            return EXIT_SUCCESS;
         }
     };
 
 
-    static int Main(int argc, char** argv)
+    // [[maybe_unused]] attribute because comp keeps complaining, will be removed eventually
+    static int [[maybe_unused]] Main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
     {
         // fra16s52-in-f4.1e100.net
         const std::string website = "www.google.com";
         Socket socket;
-        if (!socket.Init(website))
-            return 1;
-        socket.Ping();
-        return 0;
+        return socket.Ping(website);
     }
 }
 #endif

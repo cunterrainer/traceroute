@@ -89,13 +89,13 @@ namespace PIndep
     namespace Time
     {
         using TimePoint = std::chrono::high_resolution_clock::time_point;
-        // TODO: switch linux to using GetCurrentTimeH (GetCurrentTime is a macro defined in WinBase.h)
+        // TODO: switch to CurrentTime on linux (GetCurrentTime is a macro defined in WinBase.h)
         static TimePoint GetCurrentTime() noexcept
         {
             return std::chrono::high_resolution_clock::now();
         }
 
-        static TimePoint GetCurrentTimeH() noexcept
+        static TimePoint CurrentTime() noexcept
         {
             return std::chrono::high_resolution_clock::now();
         }
