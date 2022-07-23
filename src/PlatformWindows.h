@@ -307,7 +307,7 @@ namespace Platform::Windows
 
 
                 // Wait for a response
-                constexpr uint16_t DEFAULT_RECV_TIMEOUT = 1000;
+                constexpr uint16_t DEFAULT_RECV_TIMEOUT = 6000;
                 rc = WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT);
                 if (rc == WAIT_FAILED)
                 {

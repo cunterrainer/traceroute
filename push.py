@@ -4,7 +4,7 @@ def Exec(command) -> None:
 	print(command)
 	os.system(command)
 
-if len(sys.argv) == 1:
+if len(sys.argv) != 2:
 	print("Please provide a commit message")
 	sys.exit()
 
