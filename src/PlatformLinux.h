@@ -1,5 +1,5 @@
 #pragma once
-#ifdef __linux__
+#ifdef LINUX
 
 // c++std
 #include <iostream>

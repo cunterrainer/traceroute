@@ -7,9 +7,9 @@ namespace Platform
 {
     static int Main(int argc, char** argv)
     {
-        #ifdef _WIN32
+        #ifdef WINDOWS
                 return Platform::Windows::Main(argc, argv);
-        #elif defined __linux__
+        #elif defined LINUX
                 return Platform::Linux::Main(argc, argv);
         #endif
     }
