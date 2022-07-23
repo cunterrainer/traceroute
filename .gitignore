@@ -1,9 +1,8 @@
 .vs/
 .vscode/
-Debug/
-Release/
-x64/
+BIN/
 
-tracert
-*.vcxproj.filters
-*.vcxproj.user
+*.sln
+*.vcxproj.*
+*.make
+Makefile

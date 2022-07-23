@@ -308,7 +308,7 @@ namespace Platform::Windows
 
                 // Wait for a response
                 constexpr uint16_t DEFAULT_RECV_TIMEOUT = 6000;
-                rc = WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT);
+                rc = static_cast<int>(WaitForSingleObject(m_Recvol.hEvent, DEFAULT_RECV_TIMEOUT));
                 if (rc == WAIT_FAILED)
                 {
                     std::cerr << "WaitForSingleObject failed! Error: " << GetLastError() << std::endl;
@@ -332,7 +332,7 @@ namespace Platform::Windows
 
                     addrinfo inf;
                     inf.ai_addr = (SOCKADDR*)&from;
-                    inf.ai_addrlen = fromlen;
+                    inf.ai_addrlen = static_cast<size_t>(fromlen);
                     //PIndep::IO::PrintRecv(m_TTL, DNS::GetAddress(&inf).value(), PIndep::Time::DeltaTime<std::milli>(PIndep::Time::CurrentTime(), time));
 
                     if (i < 4 - 1)
