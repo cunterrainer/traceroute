@@ -29,10 +29,6 @@ This are randomly generated sample addresses
     - [ ] IPv4
     - [ ] IPv6
 
-Windows `IPv4` is almost done.  
-Current implementation status: It's a ping just without the ability to trace the package.  
-`IPv6` for windows and linux will be implemented in the near future.
-
 # Build
 
 This project uses premake as it's build system. The premake5 binaries for windows and linux are already provided.  
