@@ -40,7 +40,7 @@ For additional information use:
 ## Clone
 
 ```
-git clone https://github.com/pyvyx/traceroute.git
+git clone https://github.com/cunterrainer/traceroute.git
 ```
 ```
 cd traceroute
